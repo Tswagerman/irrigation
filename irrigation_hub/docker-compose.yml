@@ -1,0 +1,31 @@
+services:
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.115.0
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "8428:8428"
+    volumes:
+      - vm-data:/victoria-metrics-data
+    command:
+      - "--storageDataPath=/victoria-metrics-data"
+      - "--retentionPeriod=90d"
+      - "--httpListenAddr=:8428"
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    restart: unless-stopped
+    mem_limit: 150m
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - victoriametrics
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+
+volumes:
+  vm-data:
+  grafana-data:
