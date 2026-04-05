@@ -2,20 +2,28 @@ services:
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.115.0
     restart: unless-stopped
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 100m
     ports:
       - "8428:8428"
     volumes:
       - vm-data:/victoria-metrics-data
+      - ./scrape.yml:/scrape.yml
     command:
       - "--storageDataPath=/victoria-metrics-data"
       - "--retentionPeriod=90d"
       - "--httpListenAddr=:8428"
+      - "--promscrape.config=/scrape.yml"
 
   grafana:
     image: grafana/grafana-oss:latest
     restart: unless-stopped
-    mem_limit: 150m
+    deploy:
+      resources:
+        limits:
+          memory: 125m
     ports:
       - "3000:3000"
     volumes:
@@ -25,6 +33,25 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
       GF_USERS_ALLOW_SIGN_UP: "false"
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 40m
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)"
 
 volumes:
   vm-data:

@@ -1,11 +1,3 @@
-"""
-collector.py — FastAPI ingestion layer for the irrigation hub.
-
-Receives Ecowitt form POSTs on port 8000 at /data/report.
-Polls Pirate Weather once per hour for the 12-hour forecast.
-Writes everything to VictoriaMetrics via InfluxDB line protocol.
-"""
-
 import asyncio
 import logging
 import os
@@ -20,7 +12,6 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-# ── Config ─────────────────────────────────────────────────────────────────────
 VM_WRITE_URL = os.getenv("VM_URL", "http://localhost:8428") + "/write"
 
 PW_KEY = os.getenv("PIRATE_WEATHER_API_KEY", "")
@@ -29,7 +20,6 @@ PW_LON = os.getenv("PIRATE_WEATHER_LON", "12.5683")
 PW_URL = f"https://api.pirateweather.net/forecast/{PW_KEY}/{PW_LAT},{PW_LON}"
 
 
-# ── InfluxDB line protocol helpers ─────────────────────────────────────────────
 def _lp(measurement: str, fields: dict, ts_seconds: int) -> str:
     """Build a single InfluxDB line protocol string for VictoriaMetrics."""
     field_str = ",".join(f"{k}={v}" for k, v in fields.items())
@@ -43,7 +33,6 @@ async def _vm_write(lines: list[str]) -> None:
         resp.raise_for_status()
 
 
-# ── Background weather poller ──────────────────────────────────────────────────
 async def poll_weather() -> None:
     """Fetch Pirate Weather once per hour and store the next 12 hours."""
     while True:
@@ -57,7 +46,6 @@ async def poll_weather() -> None:
                 data = resp.json()
 
             lines = []
-            # ── Current conditions ─────────────────────────────────────────
             now = data.get("currently", {})
             now_ts = int(now.get("time", time.time()))
             current_fields = {
@@ -71,7 +59,6 @@ async def poll_weather() -> None:
             }
             lines.append(_lp("weather_current", current_fields, now_ts))
 
-            # ── 12-hour forecast ───────────────────────────────────────────
             hourly = data.get("hourly", {}).get("data", [])[:12]
             for hour in hourly:
                 forecast_fields = {
@@ -92,7 +79,6 @@ async def poll_weather() -> None:
         await asyncio.sleep(3600)
 
 
-# ── App lifespan ───────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(poll_weather())
@@ -103,7 +89,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan, redirect_slashes=False)
 
 
-# ── Ecowitt endpoint ───────────────────────────────────────────────────────────
 @app.post("/data/report")
 @app.post("/data/report/")
 async def ecowitt_report(request: Request):
