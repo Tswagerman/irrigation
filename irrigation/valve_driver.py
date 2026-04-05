@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 RELAY_PIN        = 18
 RELAY_ON         = GPIO.LOW   # active-low: LOW energizes relay → valve opens
 RELAY_OFF        = GPIO.HIGH  # HIGH → relay off → valve closes
-MAX_OPEN_SECONDS = 15 * 60
+MAX_OPEN_SECONDS = 60 * 60
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
