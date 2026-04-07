@@ -14,9 +14,9 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # Soil moisture thresholds (%)
-MOISTURE_THRESHOLD_LOW_PRIMARY   = 55.0  # triggers watering in morning window
-MOISTURE_THRESHOLD_LOW_SECONDARY = 45.0  # triggers watering in afternoon window
-MOISTURE_THRESHOLD_HIGH          = 75.0  # stop watering once this is reached
+MOISTURE_THRESHOLD_LOW_PRIMARY   = 35.0  # triggers watering in morning window
+MOISTURE_THRESHOLD_LOW_SECONDARY = 25.0  # triggers watering in afternoon window
+MOISTURE_THRESHOLD_HIGH          = 50.0  # stop watering once this is reached
 
 # Watering session
 MAX_WATER_DURATION     = 60 * 60  # (1 hour safety cap)

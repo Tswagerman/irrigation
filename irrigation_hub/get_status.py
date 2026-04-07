@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 BASE_URL = "http://localhost:8428"
 VM_URL   = BASE_URL
 
-MOISTURE_LOW_PRIMARY   = 55.0
-MOISTURE_LOW_SECONDARY = 45.0
-MOISTURE_HIGH          = 75.0
+MOISTURE_LOW_PRIMARY   = 35.0
+MOISTURE_LOW_SECONDARY = 25.0
+MOISTURE_HIGH          = 55.0
 
 
 def q(promql: str) -> float | None:
@@ -116,7 +116,7 @@ def main():
     print()
     print("  💧 IRRIGATION")
 
-    is_watering = last_action == 1.0 and last_triggered is None
+    is_watering = last_action == 1.0
     if is_watering:
         dur = int(last_duration) if last_duration else 0
         print(f"  Status   : 🚿 WATERING  ({timedelta(seconds=dur)} elapsed)")

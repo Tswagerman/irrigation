@@ -15,4 +15,4 @@ while (True):
     #Relay on
     GPIO.output(18, 0)
     print("Relay on")
-    sleep(5)
+    #sleep(5)
