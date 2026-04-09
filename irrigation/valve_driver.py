@@ -8,8 +8,8 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 RELAY_PIN        = 18
-RELAY_ON         = GPIO.LOW   # active-low: LOW energizes relay → valve opens
-RELAY_OFF        = GPIO.HIGH  # HIGH → relay off → valve closes
+RELAY_ON         = GPIO.HIGH   # HIGH energizes relay → valve opens
+RELAY_OFF        = GPIO.LOW  # LOW de-energizes relay → valve closes
 MAX_OPEN_SECONDS = 60 * 60
 
 GPIO.setwarnings(False)
