@@ -36,6 +36,14 @@ def bar(pct, width=20, fill="█", empty="░"):
     return fill * filled + empty * (width - filled)
 
 
+def valve_is_open() -> bool:
+    try:
+        resp = httpx.get("http://localhost:8001/status", timeout=5)
+        return resp.text.strip() == "open"
+    except Exception:
+        return False
+
+
 def moisture_status(moisture, threshold):
     if moisture is None:
         return "❓ No data"
@@ -116,7 +124,10 @@ def main():
     print()
     print("  💧 IRRIGATION")
 
-    is_watering = last_action == 1.0
+    valve_open = valve_is_open()
+    is_watering = last_action == 1.0 or valve_open
+    if valve_open and last_action != 1.0:
+        print("  Note     : ⚠️  Valve open manually (not via control logic)")
     if is_watering:
         dur = int(last_duration) if last_duration else 0
         print(f"  Status   : 🚿 WATERING  ({timedelta(seconds=dur)} elapsed)")
