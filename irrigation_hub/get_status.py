@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 BASE_URL = "http://localhost:8428"
 VM_URL   = BASE_URL
 
-MOISTURE_LOW_PRIMARY   = 40.0
-MOISTURE_LOW_SECONDARY = 40.0
+MOISTURE_LOW_PRIMARY   = 50.0
+MOISTURE_LOW_SECONDARY = 50.0
 MOISTURE_HIGH          = 60.0
 
 
