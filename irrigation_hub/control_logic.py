@@ -31,7 +31,7 @@ WATER_WINDOWS = [
 
 # ── Pump / smart plug ───────────────────────────────────────────────────
 PUMP_TOPUP_HOUR = 5        # daily top-up at 5am
-PUMP_TOPUP_DURATION = 5 * 60  # 5 minutes
+PUMP_TOPUP_DURATION = 10 * 60  # 5 minutes
 EMERGENCY_TOPUP_MAX_PER_DAY = 3  # After three emergency topus send notification
 
 # How often to check conditions

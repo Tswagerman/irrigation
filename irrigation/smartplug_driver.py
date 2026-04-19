@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 PLUG_IP             = os.getenv("XIAOMI_PLUG_IP")
 PLUG_TOKEN          = os.getenv("XIAOMI_PLUG_TOKEN")
-MAX_RUN_SECONDS     = 5 * 60
+MAX_RUN_SECONDS     = 10 * 60
 MANUAL_OVERRIDE_MAX = 10 * 60
 
 plug = MiotDevice(PLUG_IP, PLUG_TOKEN)

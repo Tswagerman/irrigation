@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 BASE_URL = "http://localhost:8428"
 VM_URL   = BASE_URL
 
-MOISTURE_LOW_PRIMARY   = 50.0
-MOISTURE_LOW_SECONDARY = 50.0
-MOISTURE_HIGH          = 60.0
+# Fallback thresholds — used only if VictoriaMetrics has no stored values
+MOISTURE_LOW_DEFAULT  = 50.0
+MOISTURE_HIGH_DEFAULT = 60.0
 
 
 def q(promql: str) -> float | None:
@@ -44,12 +44,20 @@ def valve_is_open() -> bool:
         return False
 
 
-def moisture_status(moisture, threshold):
+def pump_status_str() -> str:
+    try:
+        resp = httpx.get("http://localhost:8003/status", timeout=5)
+        return resp.text.strip()
+    except Exception:
+        return None
+
+
+def moisture_status(moisture, threshold_low, threshold_high):
     if moisture is None:
         return "❓ No data"
-    if moisture >= MOISTURE_HIGH:
+    if moisture >= threshold_high:
         return "💧 Saturated"
-    if moisture >= threshold:
+    if moisture >= threshold_low:
         return "✅ OK"
     return "🌵 Dry — needs water"
 
@@ -75,19 +83,23 @@ def main():
     print(f"  {now.strftime('%A %d %b %Y  %H:%M:%S')}")
     print("=" * 52)
 
+    threshold_low  = q("last_over_time(irrigation_logic_threshold[1h])")
+    threshold_high = q("last_over_time(irrigation_logic_threshold_high[1h])")
+    threshold_low  = threshold_low  if threshold_low  is not None else MOISTURE_LOW_DEFAULT
+    threshold_high = threshold_high if threshold_high is not None else MOISTURE_HIGH_DEFAULT
+
     s1 = q("avg_over_time(ecowitt_sensors_soil_moisture_1[5m])")
     s2 = q("avg_over_time(ecowitt_sensors_soil_moisture_2[5m])")
     available = [v for v in [s1, s2] if v is not None]
     avg = round(sum(available) / len(available), 1) if available else None
-    threshold = MOISTURE_LOW_PRIMARY if 6 <= hour < 10 else MOISTURE_LOW_SECONDARY
 
     print()
     print("  🌍 SOIL MOISTURE")
     print(f"  Sensor 1 : {fmt(s1, '%', 1):>7}  {bar(s1)}")
     print(f"  Sensor 2 : {fmt(s2, '%', 1):>7}  {bar(s2)}")
     print(f"  Average  : {fmt(avg, '%', 1):>7}  {bar(avg)}")
-    print(f"  Status   : {moisture_status(avg, threshold)}")
-    print(f"  Threshold: {threshold}% (high: {MOISTURE_HIGH}%)")
+    print(f"  Status   : {moisture_status(avg, threshold_low, threshold_high)}")
+    print(f"  Threshold: {threshold_low}% (high: {threshold_high}%)")
 
     b1 = q("last_over_time(ecowitt_sensors_soil_battery_1[1h])")
     b2 = q("last_over_time(ecowitt_sensors_soil_battery_2[1h])")
@@ -135,10 +147,10 @@ def main():
         print(f"  Status   : ⏸  Idle")
 
     reasons = []
-    if avg is not None and avg >= threshold and not is_watering:
-        reasons.append(f"moisture OK ({avg}% ≥ {threshold}%)")
-    if avg is not None and avg < threshold and not is_watering:
-        reasons.append(f"moisture low ({avg}% < {threshold}%) but outside window")
+    if avg is not None and avg >= threshold_low and not is_watering:
+        reasons.append(f"moisture OK ({avg}% ≥ {threshold_low}%)")
+    if avg is not None and avg < threshold_low and not is_watering:
+        reasons.append(f"moisture low ({avg}% < {threshold_low}%) but outside window")
     if reason_moisture_high == 1:
         reasons.append("stopped — moisture reached target")
     if reason_max_dur == 1:
@@ -147,8 +159,38 @@ def main():
     if reasons:
         print(f"  Reason   : {', '.join(reasons)}")
 
-    in_window = any(s <= hour < e for s, e in [(0, 24)])
+    in_window = any(s <= hour < e for s, e in [(6, 10), (14, 21)])
     print(f"  Window   : {'✅ Active' if in_window else '⏰ Outside window'} (hour={hour})")
+    last_pump_action     = q("last_over_time(irrigation_logic_pump_action[2h])")
+    last_pump_reason     = q("last_over_time(irrigation_logic_pump_reason[2h])")
+    pump_warning         = q("last_over_time(irrigation_logic_pump_warning[2h])")
+    emergency_topups     = q("last_over_time(irrigation_logic_emergency_topups_today[2h])")
+    plug_status          = pump_status_str()
+
+    print()
+    print("  🔌 PUMP")
+
+    if plug_status is not None:
+        is_pump_on = plug_status.startswith("on")
+        icon = "⚡ ON" if is_pump_on else "⏸  Off"
+        print(f"  Status   : {icon}  ({plug_status})")
+    else:
+        print(f"  Status   : ❓ Driver unreachable")
+
+    if last_pump_reason is not None:
+        reason_label = "scheduled" if last_pump_reason == 0.0 else "emergency top-up"
+        action_label = "ran" if last_pump_action == 1.0 else "skipped"
+        print(f"  Last run : {action_label} ({reason_label})")
+    elif is_pump_on:
+        icon = "⚠️"
+        print(f"  {icon} Driver turned on manually, control logic bypassed")
+
+    if emergency_topups is not None and emergency_topups > 0:
+        icon = "⚠️ " if emergency_topups >= 2 else "ℹ️ "
+        print(f"  Emerg.   : {icon} {int(emergency_topups)} top-up(s) today")
+
+    if pump_warning == 1.0:
+        print(f"  WARNING  : 🚨 Max emergency top-ups reached — check pump/tank!")
 
     print()
     print("=" * 52)
