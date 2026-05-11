@@ -13,12 +13,12 @@ services:
       - ./scrape.yml:/scrape.yml
     command:
       - "--storageDataPath=/victoria-metrics-data"
-      - "--retentionPeriod=90d"
+      - "--retentionPeriod=7d"
       - "--httpListenAddr=:8428"
       - "--promscrape.config=/scrape.yml"
 
   grafana:
-    image: grafana/grafana-oss:latest
+    image: grafana/grafana-oss:12.4.2
     restart: unless-stopped
     deploy:
       resources:
@@ -28,6 +28,7 @@ services:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana.ini:/etc/grafana/grafana.ini
     depends_on:
       - victoriametrics
     environment:
