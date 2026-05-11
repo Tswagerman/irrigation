@@ -10,7 +10,8 @@ Metrics written:
   esp_water_flow_battery_v  (water_flow node battery voltage)
   esp_tank_level            (1=liquid present, 0=absent)
   esp_tank_level_battery_v  (tank_level node battery voltage)
-
+  esp_greenhouse_temp_c     (greenhouse air temperature, from water_flow node Si7021)
+  esp_greenhouse_humidity   (greenhouse air humidity %, from water_flow node Si7021)
 Run as a systemd service: irrigation-esp-bridge.service
 Serial device: /dev/ttyACM0 or /dev/ttyUSB0 (pass as --port argument)
 """
@@ -67,9 +68,11 @@ def handle_packet(packet: dict) -> None:
         return
 
     # Sensor data packet
-    node_id = packet.get("node_id")
-    value   = packet.get("value")
-    voltage = packet.get("voltage", 0.0)
+    node_id  = packet.get("node_id")
+    value    = packet.get("value")
+    voltage  = packet.get("voltage", 0.0)
+    temp     = packet.get("temp_c", 0.0)
+    humidity = packet.get("humidity", 0.0)
 
     if node_id is None or value is None:
         log.warning(f"Unrecognised packet: {packet}")
@@ -83,7 +86,9 @@ def handle_packet(packet: dict) -> None:
         # Raw pulses stored; derived flow rate can be computed in Grafana
         lines.append(f"esp_water_flow_pulses value={float(value)} {now}000000000")
         lines.append(f"esp_water_flow_battery_v value={voltage} {now}000000000")
-        log.info(f"water_flow: {value} pulses  batt={voltage}V")
+        lines.append(f"esp_greenhouse_temp_c value={temp} {now}000000000")
+        lines.append(f"esp_greenhouse_humidity value={humidity} {now}000000000")
+        log.info(f"water_flow: {value} pulses  batt={voltage}V  temp={temp}C  hum={humidity}%")
 
     elif node_id == "tank_level":
         # 1 = water present (tank full), 0 = absent

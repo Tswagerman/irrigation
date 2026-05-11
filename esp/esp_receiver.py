@@ -14,8 +14,8 @@ import sys
 import ubinascii
 
 # ── Packet format must match esp_sensor.py ───────────────────────────────────
-PACKET_FMT  = '<BHfI'
-PACKET_SIZE = struct.calcsize(PACKET_FMT)   # 10 bytes
+PACKET_FMT  = '<BHfffI'
+PACKET_SIZE = struct.calcsize(PACKET_FMT)   # 18 bytes
 
 # ── Wire ID → descriptive name ────────────────────────────────────────────────
 NODE_NAMES = {1: "water_flow", 2: "tank_level"}
@@ -34,12 +34,14 @@ def setup_espnow() -> espnow.ESPNow:
     return e
 
 
-def emit_json(node_name: str, value: int, voltage: float, ticks: int, rssi: int):
+def emit_json(node_name: str, value: int, voltage: float, temp: float, humidity: float, ticks: int, rssi: int):
     """Print a JSON record to stdout (USB serial → Pi)."""
     record = {
         "node_id":  node_name,
         "value":    value,
         "voltage":  voltage,
+        "temp_c":   temp,
+        "humidity": humidity,
         "ticks_ms": ticks,
         "rssi":     rssi,
     }
@@ -80,9 +82,9 @@ def run():
             )
             continue
 
-        wire_id, value, voltage, ticks = struct.unpack(PACKET_FMT, msg)
+        wire_id, value, voltage, temp, humidity, ticks = struct.unpack(PACKET_FMT, msg)
         node_name = NODE_NAMES.get(wire_id, f"unknown_{wire_id}")
-        emit_json(node_name, value, voltage, ticks, rssi)
+        emit_json(node_name, value, voltage, temp, humidity, ticks, rssi)
 
 
 run()
