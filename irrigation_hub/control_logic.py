@@ -30,9 +30,8 @@ WATER_WINDOWS = [
 ]
 
 # ── Pump / smart plug ───────────────────────────────────────────────────
-PUMP_TOPUP_HOUR = 5        # daily top-up at 5am
-PUMP_TOPUP_DURATION = 10 * 60  # 5 minutes
-EMERGENCY_TOPUP_MAX_PER_DAY = 3  # After three emergency topus send notification
+PUMP_FILL_DURATION = 12 * 60  # run for 12 minutes when tank is empty
+PUMP_TOPUP_HOUR = 5           # fallback daily top-up at 5am when sensor unavailable
 
 # How often to check conditions
 CHECK_INTERVAL_SECONDS = 60
@@ -43,15 +42,14 @@ PLUG_URL = os.getenv("PLUG_DRIVER_URL")
 
 is_watering: bool = False
 watering_start_time: float | None = None
-moisture_at_start: float | None = None  # moisture when watering session began
+moisture_at_start: float | None = None
 stopped_by_max_duration: bool = False
 
 pump_running: bool = False
 pump_start_time: float | None = None
+last_pump_start: float | None = None
+last_pump_duration: float | None = None
 last_topup_date: str | None = None
-emergency_topup_done: bool = False
-emergency_topups_today: int = 0
-last_emergency_topup_date: str | None = None
 
 
 def _query(promql: str) -> float | None:
@@ -78,6 +76,13 @@ def _write_event(fields: dict) -> None:
         httpx.post(f"{VM_URL}/write", content=line, timeout=5)
     except Exception as exc:
         log.warning(f"Failed to write event to VM: {exc}")
+
+
+def tank_level() -> bool | None:
+    result = _query("last_over_time(esp_tank_level_value[5m])")
+    if result is None:
+        return None
+    return result == 1.0
 
 
 def avg_soil_moisture() -> float | None:
@@ -158,13 +163,13 @@ def pump_off() -> bool:
 
 
 def run_check() -> None:
-    global is_watering, watering_start_time, moisture_at_start
-    global stopped_by_max_duration, emergency_topup_done
+    global is_watering, watering_start_time, moisture_at_start, stopped_by_max_duration
 
     moisture = avg_soil_moisture()
     rain_now = current_rain_intensity()
     rain_prob = max_forecast_rain_prob()
     rain_int = max_forecast_rain_intensity()
+    tank_full = tank_level()
     in_window, is_primary, hour = current_window()
 
     threshold = MOISTURE_THRESHOLD_LOW_PRIMARY if is_primary else MOISTURE_THRESHOLD_LOW_SECONDARY
@@ -191,8 +196,7 @@ def run_check() -> None:
             )
             if stopped_by_max_duration:
                 log.info(
-                    f"Session timed out — moisture at start={moisture_at_start}% "
-                    f"now={moisture}% — will check for emergency top-up"
+                    f"Session timed out — moisture at start={moisture_at_start}% now={moisture}%"
                 )
             _write_event({
                 "action": 0,
@@ -247,7 +251,6 @@ def run_check() -> None:
             watering_start_time = time.time()
         moisture_at_start = moisture
         stopped_by_max_duration = False
-        emergency_topup_done = False
         _write_event({
             "action": 1,
             "moisture": moisture,
@@ -276,99 +279,57 @@ def run_check() -> None:
 
 
 def run_pump_check() -> None:
-    global pump_running, pump_start_time, last_topup_date
-    global stopped_by_max_duration, emergency_topup_done
-    global emergency_topups_today, last_emergency_topup_date
-    global moisture_at_start
+    global pump_running, pump_start_time, last_pump_start, last_pump_duration, last_topup_date
 
-    now = datetime.now()
-    hour = now.hour
-    today = now.strftime("%Y-%m-%d")
-    in_window, _, _ = current_window()
-
-    if last_emergency_topup_date != today:
-        emergency_topups_today = 0
+    tank_full = tank_level()
 
     if pump_running:
         elapsed = time.time() - pump_start_time
-        if elapsed >= PUMP_TOPUP_DURATION:
-            log.info(
-                f"Pump top-up complete after {round(elapsed)}s — turning off")
-            pump_off()
-            pump_running = False
-            pump_start_time = None
+        if elapsed >= PUMP_FILL_DURATION:
+            log.info(f"Pump fill complete after {round(elapsed)}s — turning off")
+            if pump_off():
+                pump_running = False
+                last_pump_duration = elapsed
+                pump_start_time = None
+                _write_event({
+                    "pump_action": 0,
+                    "pump_duration_s": round(elapsed),
+                    "tank_full": int(tank_full) if tank_full is not None else -1,
+                })
         else:
-            log.info(
-                f"Pump running — {
-                    round(elapsed)}s of {PUMP_TOPUP_DURATION}s")
+            log.info(f"Pump running — {round(elapsed)}s of {PUMP_FILL_DURATION}s")
         return
 
-    # ── Daily 5am top-up ─────────────────────────────────────────────────────
-    if hour == PUMP_TOPUP_HOUR and last_topup_date != today:
-        log.info("Starting daily 5am pump top-up")
-        if pump_on():
-            pump_running = True
-            pump_start_time = time.time()
-            last_topup_date = today
-            # 0=scheduled, 1=emergency
-            _write_event({"pump_action": 1, "pump_reason": 0})
-        return
-
-    # ── Emergency top-up ─────────────────────────────────────────────────────
-    if stopped_by_max_duration and not emergency_topup_done and in_window:
-        moisture = avg_soil_moisture()
-
-        if emergency_topups_today >= EMERGENCY_TOPUP_MAX_PER_DAY:
-            log.critical(
-                f"⚠️  {emergency_topups_today} emergency top-ups today — "
-                f"check pump and hose! Tank may not be filling correctly."
-            )
-            _write_event({
-                "pump_action": 0,
-                "pump_warning": 1,
-                "emergency_topups_today": emergency_topups_today,
-            })
-            stopped_by_max_duration = False
-            emergency_topup_done = True
-            return
-
-        if moisture is not None and moisture_at_start is not None and moisture <= moisture_at_start:
-            log.warning(
-                f"Emergency top-up triggered — moisture unchanged or lower "
-                f"(start={moisture_at_start}% now={moisture}%) — tank likely empty"
-            )
+    if tank_full is not None:
+        if not tank_full:
+            log.info("Tank empty — starting pump fill")
             if pump_on():
                 pump_running = True
                 pump_start_time = time.time()
-                emergency_topup_done = True
-                stopped_by_max_duration = False
-                emergency_topups_today += 1
-                last_emergency_topup_date = today
-                _write_event({
-                    "pump_action": 1,
-                    "pump_reason": 1,
-                    "moisture": moisture,
-                    "moisture_at_start": moisture_at_start,
-                    "emergency_topups_today": emergency_topups_today,
-                })
+                last_pump_start = pump_start_time
+                _write_event({"pump_action": 1, "tank_full": 0})
         else:
-            log.info(
-                f"Emergency top-up not needed — moisture rose from "
-                f"{moisture_at_start}% to {moisture}%"
-            )
-            stopped_by_max_duration = False
-            emergency_topup_done = True
-            _write_event({
-                "pump_action": 0,
-                "pump_reason": 1,
-                "moisture": moisture or -1,
-                "moisture_at_start": moisture_at_start or -1,
-            })
+            if last_pump_start and last_pump_duration:
+                ago = round((time.time() - last_pump_start) / 60)
+                log.info(f"Pump idle — tank has water (last ran {ago}min ago for {round(last_pump_duration)}s)")
+            else:
+                log.info("Pump idle — tank has water")
+        return
+
+    # ── Fallback: sensor unavailable — daily 5am top-up ─────────────────
+    today = datetime.now().strftime("%Y-%m-%d")
+    hour = datetime.now().hour
+    log.warning(f"Tank level sensor unavailable — using fallback schedule (hour={hour})")
+    if hour == PUMP_TOPUP_HOUR and last_topup_date != today:
+        log.info("Fallback: starting daily 5am pump top-up")
+        if pump_on():
+            pump_running = True
+            pump_start_time = time.time()
+            last_pump_start = pump_start_time
+            last_topup_date = today
+            _write_event({"pump_action": 1, "pump_reason": 0, "fallback": 1})
     else:
-        log.info(
-            f"Pump idle — daily top-up at {PUMP_TOPUP_HOUR}:00 "
-            f"(hour={hour}, last={last_topup_date})"
-        )
+        log.info(f"Fallback: pump idle — top-up at {PUMP_TOPUP_HOUR}:00 (last={last_topup_date})")
 
 
 if __name__ == "__main__":
