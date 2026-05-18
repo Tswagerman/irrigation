@@ -18,14 +18,14 @@ import ubinascii
 from machine import SoftI2C
 
 # --# -- Configuration -------------------------------------------------------------
-NODE_ID = "water_flow"
+NODE_ID = "tank_level"
 
 _NODE_WIRE_ID = {"water_flow": 1, "tank_level": 2}
 
 RECEIVER_MAC = b'\xac\xa7\x04\xa0\x7c\xc0'
 
 DEEP_SLEEP_MS   = 60_000          # 60 s between readings
-SENSOR_WARMUP_MS = 500            # ms to wait after powering sensor before reading
+SENSOR_WARMUP_MS = 1500            # ms to wait after powering sensor before reading
 FLOW_PULSE_WINDOW_MS = 2_000      # ms to count flow pulses (longer = more accurate)
 
 # GPIO pins

@@ -307,7 +307,7 @@ def run_pump_check() -> None:
                 pump_running = True
                 pump_start_time = time.time()
                 last_pump_start = pump_start_time
-                _write_event({"pump_action": 1, "tank_full": 0})
+                _write_event({"pump_action": 1, "pump_reason": 0, "tank_full": 0})
         else:
             if last_pump_start and last_pump_duration:
                 ago = round((time.time() - last_pump_start) / 60)
@@ -327,7 +327,7 @@ def run_pump_check() -> None:
             pump_start_time = time.time()
             last_pump_start = pump_start_time
             last_topup_date = today
-            _write_event({"pump_action": 1, "pump_reason": 0, "fallback": 1})
+            _write_event({"pump_action": 1, "pump_reason": 1})
     else:
         log.info(f"Fallback: pump idle — top-up at {PUMP_TOPUP_HOUR}:00 (last={last_topup_date})")
 
