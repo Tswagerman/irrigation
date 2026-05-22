@@ -44,7 +44,7 @@ def valve_is_open() -> bool:
         return False
 
 
-def pump_status_str() -> str:
+def pump_status_str() -> str | None:
     try:
         resp = httpx.get("http://localhost:8003/status", timeout=5)
         return resp.text.strip()
@@ -83,11 +83,13 @@ def main():
     print(f"  {now.strftime('%A %d %b %Y  %H:%M:%S')}")
     print("=" * 52)
 
+    # ── Thresholds ──────────────────────────────────────────
     threshold_low  = q("last_over_time(irrigation_logic_threshold[1h])")
     threshold_high = q("last_over_time(irrigation_logic_threshold_high[1h])")
     threshold_low  = threshold_low  if threshold_low  is not None else MOISTURE_LOW_DEFAULT
     threshold_high = threshold_high if threshold_high is not None else MOISTURE_HIGH_DEFAULT
 
+    # ── Soil moisture ────────────────────────────────────────
     s1 = q("avg_over_time(ecowitt_sensors_soil_moisture_1[5m])")
     s2 = q("avg_over_time(ecowitt_sensors_soil_moisture_2[5m])")
     available = [v for v in [s1, s2] if v is not None]
@@ -101,13 +103,29 @@ def main():
     print(f"  Status   : {moisture_status(avg, threshold_low, threshold_high)}")
     print(f"  Threshold: {threshold_low}% (high: {threshold_high}%)")
 
-    b1 = q("last_over_time(ecowitt_sensors_soil_battery_1[1h])")
-    b2 = q("last_over_time(ecowitt_sensors_soil_battery_2[1h])")
+    # ── Sensor batteries ─────────────────────────────────────
+    b1     = q("last_over_time(ecowitt_sensors_soil_battery_1[1h])")
+    b2     = q("last_over_time(ecowitt_sensors_soil_battery_2[1h])")
+    esp_wf = q("last_over_time(esp_water_flow_battery_v_value[1h])")
+    esp_tl = q("last_over_time(esp_tank_level_battery_v_value[1h])")
+
     print()
     print("  🔋 SENSOR BATTERIES")
-    print(f"  Sensor 1 : {fmt(b1, 'V', 2)}")
-    print(f"  Sensor 2 : {fmt(b2, 'V', 2)}")
+    print(f"  Soil 1   : {fmt(b1, 'V', 2)}")
+    print(f"  Soil 2   : {fmt(b2, 'V', 2)}")
+    print(f"  ESP WF   : {fmt(esp_wf, 'V', 2)}")
+    print(f"  ESP TL   : {fmt(esp_tl, 'V', 2)}")
 
+    # ── Greenhouse environment (ESP Si7021) ──────────────────
+    gh_temp = q("last_over_time(esp_greenhouse_temp_c_value[1h])")
+    gh_hum  = q("last_over_time(esp_greenhouse_humidity_value[1h])")
+
+    print()
+    print("  🏡 GREENHOUSE ENVIRONMENT")
+    print(f"  Temp     : {fmt(gh_temp, '°C', 1)}")
+    print(f"  Humidity : {fmt(gh_hum, '%', 0)}")
+
+    # ── Weather ──────────────────────────────────────────────
     temp      = q("last_over_time(weather_current_temp_c[2h])")
     humidity  = q("last_over_time(weather_current_humidity[2h])")
     wind      = q("last_over_time(weather_current_wind_speed[2h])")
@@ -127,11 +145,12 @@ def main():
     for line in rain_status(rain_now, rain_prob, rain_int):
         print(f"  {line}")
 
-    last_action    = q("last_over_time(irrigation_logic_action[10m])")
-    last_triggered = q("last_over_time(irrigation_logic_triggered[10m])")
-    last_duration  = q("last_over_time(irrigation_logic_session_duration_s[10m])")
+    # ── Irrigation ───────────────────────────────────────────
+    last_action          = q("last_over_time(irrigation_logic_action[10m])")
+    last_duration        = q("last_over_time(irrigation_logic_session_duration_s[10m])")
     reason_moisture_high = q("last_over_time(irrigation_logic_reason_moisture_high[10m])")
     reason_max_dur       = q("last_over_time(irrigation_logic_reason_max_duration[10m])")
+    flow_pulses          = q("last_over_time(esp_water_flow_pulses_value[5m])")
 
     print()
     print("  💧 IRRIGATION")
@@ -143,6 +162,10 @@ def main():
     if is_watering:
         dur = int(last_duration) if last_duration else 0
         print(f"  Status   : 🚿 WATERING  ({timedelta(seconds=dur)} elapsed)")
+        if flow_pulses is not None:
+            print(f"  Flow     : {fmt(flow_pulses, ' pulses', 0)}")
+        else:
+            print(f"  Flow     : ❓ No data")
     else:
         print(f"  Status   : ⏸  Idle")
 
@@ -161,11 +184,23 @@ def main():
 
     in_window = any(s <= hour < e for s, e in [(6, 10), (14, 21)])
     print(f"  Window   : {'✅ Active' if in_window else '⏰ Outside window'} (hour={hour})")
-    last_pump_action     = q("last_over_time(irrigation_logic_pump_action[2h])")
-    last_pump_reason     = q("last_over_time(irrigation_logic_pump_reason[2h])")
-    pump_warning         = q("last_over_time(irrigation_logic_pump_warning[2h])")
-    emergency_topups     = q("last_over_time(irrigation_logic_emergency_topups_today[2h])")
-    plug_status          = pump_status_str()
+
+    # ── Tank level ───────────────────────────────────────────
+    tank_level = q("last_over_time(esp_tank_level_value[10m])")
+
+    print()
+    print("  🪣 TANK")
+    if tank_level is None:
+        print("  Level    : ❓ No data")
+    elif tank_level >= 1.0:
+        print("  Level    : 💧 Water present")
+    else:
+        print("  Level    : 🔴 LOW / empty")
+
+    # ── Pump ─────────────────────────────────────────────────
+    last_pump_action = q("last_over_time(irrigation_logic_pump_action[2h])")
+    last_pump_reason = q("last_over_time(irrigation_logic_pump_reason[2h])")
+    plug_status      = pump_status_str()
 
     print()
     print("  🔌 PUMP")
@@ -174,23 +209,15 @@ def main():
         is_pump_on = plug_status.startswith("on")
         icon = "⚡ ON" if is_pump_on else "⏸  Off"
         print(f"  Status   : {icon}  ({plug_status})")
+        if is_pump_on and last_pump_action != 1.0:
+            print("  Warning  : ⚠️  Pump on but no recent logic event — manual override?")
     else:
-        print(f"  Status   : ❓ Driver unreachable")
+        print("  Status   : ❓ Driver unreachable")
 
     if last_pump_reason is not None:
-        reason_label = "scheduled" if last_pump_reason == 0.0 else "emergency top-up"
+        reason_label = "tank empty" if last_pump_reason == 0.0 else "5am fallback"
         action_label = "ran" if last_pump_action == 1.0 else "skipped"
         print(f"  Last run : {action_label} ({reason_label})")
-    elif is_pump_on:
-        icon = "⚠️"
-        print(f"  {icon} Driver turned on manually, control logic bypassed")
-
-    if emergency_topups is not None and emergency_topups > 0:
-        icon = "⚠️ " if emergency_topups >= 2 else "ℹ️ "
-        print(f"  Emerg.   : {icon} {int(emergency_topups)} top-up(s) today")
-
-    if pump_warning == 1.0:
-        print(f"  WARNING  : 🚨 Max emergency top-ups reached — check pump/tank!")
 
     print()
     print("=" * 52)
@@ -198,4 +225,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

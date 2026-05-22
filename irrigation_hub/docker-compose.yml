@@ -5,7 +5,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 100m
+          memory: 125m
     ports:
       - "8428:8428"
     volumes:
@@ -16,6 +16,9 @@ services:
       - "--retentionPeriod=7d"
       - "--httpListenAddr=:8428"
       - "--promscrape.config=/scrape.yml"
+      - "--search.disableCache=true"
+      - "--search.maxConcurrentRequests=1"
+      - "--search.maxQueryDuration=30s"
 
   grafana:
     image: grafana/grafana-oss:12.4.2
