@@ -320,7 +320,7 @@ def run_pump_check() -> None:
     today = datetime.now().strftime("%Y-%m-%d")
     hour = datetime.now().hour
     log.warning(f"Tank level sensor unavailable — using fallback schedule (hour={hour})")
-    if hour == PUMP_TOPUP_HOUR and last_topup_date != today:
+    if hour == PUMP_TOPUP_HOUR and watering_start_time and (time.time() - watering_start_time) < 12 * 3600 and last_topup_date != today:
         log.info("Fallback: starting daily 5am pump top-up")
         if pump_on():
             pump_running = True
