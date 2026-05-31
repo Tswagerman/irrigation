@@ -1,9 +1,9 @@
 import logging
 import os
 import time
-from datetime import datetime
-
 import httpx
+import json
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,6 +12,8 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
 )
 log = logging.getLogger(__name__)
+
+STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pump_state.json")
 
 # Soil moisture thresholds (%)
 MOISTURE_THRESHOLD_LOW_PRIMARY = 50.0  # triggers watering in morning window
@@ -79,6 +81,35 @@ def _write_event(fields: dict) -> None:
         httpx.post(f"{VM_URL}/write", content=line, timeout=5)
     except Exception as exc:
         log.warning(f"Failed to write event to VM: {exc}")
+
+
+def _save_fill_state() -> None:
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump({
+                "pump_fills_today": pump_fills_today,
+                "last_pump_fill_date": last_pump_fill_date,
+            }, f)
+    except Exception as exc:
+        log.warning(f"Failed to save pump fill state: {exc}")
+
+
+def _restore_fill_state() -> None:
+    global pump_fills_today, last_pump_fill_date
+    try:
+        with open(STATE_FILE) as f:
+            state = json.load(f)
+        today = datetime.now().strftime("%Y-%m-%d")
+        if state.get("last_pump_fill_date") == today:
+            pump_fills_today = int(state.get("pump_fills_today", 0))
+            last_pump_fill_date = today
+            log.info(f"Restored pump fill state: {pump_fills_today} fills today")
+        else:
+            log.info("Pump fill state is from a previous day — resetting")
+    except FileNotFoundError:
+        log.info("No pump fill state file — starting fresh")
+    except Exception as exc:
+        log.warning(f"Failed to restore pump fill state: {exc}")
 
 
 def tank_level() -> bool | None:
@@ -324,6 +355,7 @@ def run_pump_check() -> None:
                 pump_start_time = time.time()
                 last_pump_start = pump_start_time
                 pump_fills_today += 1
+                _save_fill_state()
                 _write_event({"pump_action": 1, "pump_reason": 0, "tank_full": 0, "pump_fills_today": pump_fills_today})
         else:
             if last_pump_start and last_pump_duration:
@@ -344,6 +376,8 @@ def run_pump_check() -> None:
             pump_start_time = time.time()
             last_pump_start = pump_start_time
             last_topup_date = today
+            pump_fills_today += 1
+            _save_fill_state()
             _write_event({"pump_action": 1, "pump_reason": 1})
     else:
         log.info(f"Fallback: pump idle — top-up at {PUMP_TOPUP_HOUR}:00 (last={last_topup_date})")
@@ -359,6 +393,11 @@ if __name__ == "__main__":
         f"max_duration={MAX_WATER_DURATION}s "
         f"windows={WATER_WINDOWS}"
     )
+    log.info(f"Pump config — fill_duration={PUMP_FILL_DURATION}s topup_hour={PUMP_TOPUP_HOUR} max_fills_per_day={MAX_PUMP_FILLS_PER_DAY}")
+    log.info(f"Before starting main loop, restoring pump fill state from file")
+    _restore_fill_state() 
+    log.info(f"last_pump_fill_date={last_pump_fill_date} today={datetime.now().strftime('%Y-%m-%d')}")
+    log.info(f"pump_fills_today={pump_fills_today}")
     while True:
         try:
             run_check()
