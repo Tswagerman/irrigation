@@ -50,6 +50,9 @@ pump_start_time: float | None = None
 last_pump_start: float | None = None
 last_pump_duration: float | None = None
 last_topup_date: str | None = None
+pump_fills_today: int = 0
+last_pump_fill_date: str | None = None
+MAX_PUMP_FILLS_PER_DAY: int = 4
 
 
 def _query(promql: str) -> float | None:
@@ -280,6 +283,12 @@ def run_check() -> None:
 
 def run_pump_check() -> None:
     global pump_running, pump_start_time, last_pump_start, last_pump_duration, last_topup_date
+    global pump_fills_today, last_pump_fill_date
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    if last_pump_fill_date != today:
+        pump_fills_today = 0
+        last_pump_fill_date = today
 
     tank_full = tank_level()
 
@@ -302,12 +311,20 @@ def run_pump_check() -> None:
 
     if tank_full is not None:
         if not tank_full:
+            if pump_fills_today >= MAX_PUMP_FILLS_PER_DAY:
+                log.critical(
+                    f"Tank sensor reads empty but already ran {pump_fills_today} fills today — "
+                    f"sensor may be stuck or tank not filling. Pump BLOCKED for rest of day."
+                )
+                _write_event({"pump_action": 0, "pump_warning": 1, "pump_fills_today": pump_fills_today})
+                return
             log.info("Tank empty — starting pump fill")
             if pump_on():
                 pump_running = True
                 pump_start_time = time.time()
                 last_pump_start = pump_start_time
-                _write_event({"pump_action": 1, "pump_reason": 0, "tank_full": 0})
+                pump_fills_today += 1
+                _write_event({"pump_action": 1, "pump_reason": 0, "tank_full": 0, "pump_fills_today": pump_fills_today})
         else:
             if last_pump_start and last_pump_duration:
                 ago = round((time.time() - last_pump_start) / 60)
