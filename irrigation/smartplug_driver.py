@@ -2,10 +2,10 @@ import logging
 import os
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, HTTPServer
-
+import urllib.request
 from dotenv import load_dotenv
 from miio import MiotDevice
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 load_dotenv("/home/sodas/src/irrigation_hub/.env")
 
@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 
 PLUG_IP             = os.getenv("XIAOMI_PLUG_IP")
 PLUG_TOKEN          = os.getenv("XIAOMI_PLUG_TOKEN")
+VM_URL              = os.getenv("VM_URL", "http://localhost:8428")
 MAX_RUN_SECONDS     = 12 * 60
 MANUAL_OVERRIDE_MAX = 10 * 60
 
@@ -50,9 +51,34 @@ def _auto_off() -> None:
         _state_since = time.time()
 
 
+def _get_power_w() -> int | None:
+    try:
+        result = plug.get_property_by(11, 2)
+        return int(result[0]["value"])
+    except Exception as exc:
+        log.warning(f"Failed to get plug power: {exc}")
+        return None
+
+
+def _vm_write_state(is_on: bool, power_w: int | None) -> None:
+    """Write plug state + wattage to VictoriaMetrics for full visibility."""
+    try:
+        fields = [f"on={int(is_on)}"]
+        if power_w is not None:
+            fields.append(f"power_w={power_w}")
+        line = f"smartplug {','.join(fields)} {int(time.time())}000000000"
+        req = urllib.request.Request(
+            f"{VM_URL}/write", data=line.encode(), method="POST"
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as exc:
+        log.warning(f"Failed to write plug state to VM: {exc}")
+
+
 def _poll_state() -> None:
     global _timer, _state_since
     while True:
+        is_on = None
         try:
             with _lock:
                 is_on = _is_on()
@@ -75,7 +101,12 @@ def _poll_state() -> None:
         except Exception as exc:
             log.warning(f"Plug poll failed: {exc}")
 
+        if is_on is not None:
+            power = _get_power_w()
+            _vm_write_state(is_on, power)
+
         time.sleep(30)
+
 
 
 class SmartPlugDriver:
@@ -133,7 +164,11 @@ class _Handler(BaseHTTPRequestHandler):
             is_on = _plug.is_on
             elapsed = round(time.time() - _state_since)
             state = "on" if is_on else "off"
-            self._ok(f"{state} for {_fmt_duration(elapsed)}\n")
+            power = _get_power_w()
+            power_str = f" ({power}W)" if power is not None else " — power N/A"
+            if is_on and (power is None or power < 50):
+                power_str += " ⚠ ON but no load"
+            self._ok(f"{state} for {_fmt_duration(elapsed)}{power_str}\n")
         else:
             self._respond(404, "unknown")
 
