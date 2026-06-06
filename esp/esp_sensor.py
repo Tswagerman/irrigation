@@ -136,7 +136,8 @@ def run():
 
     else:
         print(f"Unknown NODE_ID={NODE_ID}")
-        value = 0
+        pwr.value(0)
+        return
 
     # Power down sensors to save battery
     pwr.value(0)
