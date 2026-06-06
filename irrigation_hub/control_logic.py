@@ -16,10 +16,10 @@ log = logging.getLogger(__name__)
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pump_state.json")
 
 # Soil moisture thresholds (%)
-MOISTURE_THRESHOLD_LOW_PRIMARY = 50.0  # triggers watering in morning window
+MOISTURE_THRESHOLD_LOW_PRIMARY = 45.0  # triggers watering in morning window
 # triggers watering in afternoon window
-MOISTURE_THRESHOLD_LOW_SECONDARY = 50.0
-MOISTURE_THRESHOLD_HIGH = 60.0  # stop watering once this is reached
+MOISTURE_THRESHOLD_LOW_SECONDARY = 45.0
+MOISTURE_THRESHOLD_HIGH = 50.0  # stop watering once this is reached
 
 # Watering session
 MAX_WATER_DURATION = 60 * 60  # (1 hour safety cap)
