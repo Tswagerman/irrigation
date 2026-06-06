@@ -89,13 +89,14 @@ def _save_fill_state() -> None:
             json.dump({
                 "pump_fills_today": pump_fills_today,
                 "last_pump_fill_date": last_pump_fill_date,
+                "last_pump_duration": last_pump_duration if last_pump_duration is not None else 0.0,
             }, f)
     except Exception as exc:
         log.warning(f"Failed to save pump fill state: {exc}")
 
 
 def _restore_fill_state() -> None:
-    global pump_fills_today, last_pump_fill_date
+    global pump_fills_today, last_pump_fill_date, last_pump_duration
     try:
         with open(STATE_FILE) as f:
             state = json.load(f)
@@ -103,6 +104,7 @@ def _restore_fill_state() -> None:
         if state.get("last_pump_fill_date") == today:
             pump_fills_today = int(state.get("pump_fills_today", 0))
             last_pump_fill_date = today
+            last_pump_duration = float(state.get("last_pump_duration", 0.0))
             log.info(f"Restored pump fill state: {pump_fills_today} fills today")
         else:
             log.info("Pump fill state is from a previous day — resetting")
@@ -157,9 +159,11 @@ def open_valve() -> bool:
         r = httpx.post(f"{VALVE_URL}/open", timeout=5)
         r.raise_for_status()
         log.info("Valve opened")
+        _write_event({"valve_error": 0})
         return True
     except Exception as exc:
         log.error(f"Failed to open valve: {exc}")
+        _write_event({"valve_error": 1})
         return False
 
 
@@ -168,9 +172,11 @@ def close_valve() -> bool:
         r = httpx.post(f"{VALVE_URL}/close", timeout=5)
         r.raise_for_status()
         log.info("Valve closed")
+        _write_event({"valve_error": 0})
         return True
     except Exception as exc:
         log.error(f"Failed to close valve: {exc}")
+        _write_event({"valve_error": 1})
         return False
 
 
@@ -179,9 +185,11 @@ def pump_on() -> bool:
         r = httpx.post(f"{PLUG_URL}/on", timeout=5)
         r.raise_for_status()
         log.info("Pump ON")
+        _write_event({"pump_error": 0})
         return True
     except Exception as exc:
         log.error(f"Failed to turn pump on: {exc}")
+        _write_event({"pump_error": 1})
         return False
 
 
@@ -190,9 +198,11 @@ def pump_off() -> bool:
         r = httpx.post(f"{PLUG_URL}/off", timeout=5)
         r.raise_for_status()
         log.info("Pump OFF")
+        _write_event({"pump_error": 0})
         return True
     except Exception as exc:
         log.error(f"Failed to turn pump off: {exc}")
+        _write_event({"pump_error": 1})
         return False
 
 
@@ -283,8 +293,10 @@ def run_check() -> None:
         if open_valve():
             is_watering = True
             watering_start_time = time.time()
-        moisture_at_start = moisture
-        stopped_by_max_duration = False
+            moisture_at_start = moisture
+            stopped_by_max_duration = False
+        else:
+            log.error("Valve failed to open — irrigation not started")
         _write_event({
             "action": 1,
             "moisture": moisture,
@@ -366,7 +378,6 @@ def run_pump_check() -> None:
         return
 
     # ── Fallback: sensor unavailable — daily 5am top-up ─────────────────
-    today = datetime.now().strftime("%Y-%m-%d")
     hour = datetime.now().hour
     log.warning(f"Tank level sensor unavailable — using fallback schedule (hour={hour})")
     if hour == PUMP_TOPUP_HOUR and watering_start_time and (time.time() - watering_start_time) < 12 * 3600 and last_topup_date != today:
@@ -395,7 +406,9 @@ if __name__ == "__main__":
     )
     log.info(f"Pump config — fill_duration={PUMP_FILL_DURATION}s topup_hour={PUMP_TOPUP_HOUR} max_fills_per_day={MAX_PUMP_FILLS_PER_DAY}")
     log.info(f"Before starting main loop, restoring pump fill state from file")
-    _restore_fill_state() 
+    _restore_fill_state()
+    log.info("Safe startup — ensuring valve is closed")
+    close_valve()
     log.info(f"last_pump_fill_date={last_pump_fill_date} today={datetime.now().strftime('%Y-%m-%d')}")
     log.info(f"pump_fills_today={pump_fills_today}")
     while True:
