@@ -16,7 +16,6 @@ GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(RELAY_PIN, GPIO.OUT, initial=RELAY_OFF)
 
-
 class ValveDriver:
     def __init__(self):
         self._timer: threading.Timer | None = None

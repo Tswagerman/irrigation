@@ -17,7 +17,6 @@ import network
 import ubinascii
 from machine import SoftI2C
 
-# --# -- Configuration -------------------------------------------------------------
 NODE_ID = "tank_level"
 
 _NODE_WIRE_ID = {"water_flow": 1, "tank_level": 2}
@@ -28,7 +27,6 @@ DEEP_SLEEP_MS   = 60_000          # 60 s between readings
 SENSOR_WARMUP_MS = 1500            # ms to wait after powering sensor before reading
 FLOW_PULSE_WINDOW_MS = 2_000      # ms to count flow pulses (longer = more accurate)
 
-# GPIO pins
 PIN_SENSOR_POWER = 3              # HIGH to power sensors
 PIN_FLOW_SIGNAL  = 1              # flow sensor pulse input
 PIN_LEVEL_SIGNAL = 2              # liquid level digital input
@@ -59,7 +57,7 @@ def read_si7021():
         return 0.0, 0.0
 
 def read_battery_voltage():
-    # Returns battery voltage via ADC on GPIO 4. Needs 100k/100k divider.
+    # Returns battery voltage via ADC on GPIO 4.
     # Returns 0.0 if divider not wired.
     try:
         adc = machine.ADC(machine.Pin(4), atten=machine.ADC.ATTN_11DB)
@@ -146,12 +144,9 @@ def run():
     result = 'OK' if ok else 'FAILED'
     print("Send " + result)
 
-    # Deep sleep
     print(f"Sleeping {DEEP_SLEEP_MS}ms")
     machine.deepsleep(DEEP_SLEEP_MS)
 
-
-# ---- Entry point -------------------------------------------------------------------------------------------------------------------------------
 sta = network.WLAN(network.STA_IF)
 sta.active(True)
 mac = ubinascii.hexlify(sta.config('mac'), ':').decode()

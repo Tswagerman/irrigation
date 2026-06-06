@@ -83,13 +83,11 @@ def main():
     print(f"  {now.strftime('%A %d %b %Y  %H:%M:%S')}")
     print("=" * 52)
 
-    # ── Thresholds ──────────────────────────────────────────
     threshold_low  = q("last_over_time(irrigation_logic_threshold[1h])")
     threshold_high = q("last_over_time(irrigation_logic_threshold_high[1h])")
     threshold_low  = threshold_low  if threshold_low  is not None else MOISTURE_LOW_DEFAULT
     threshold_high = threshold_high if threshold_high is not None else MOISTURE_HIGH_DEFAULT
 
-    # ── Soil moisture ────────────────────────────────────────
     s1 = q("avg_over_time(ecowitt_sensors_soil_moisture_1[5m])")
     s2 = q("avg_over_time(ecowitt_sensors_soil_moisture_2[5m])")
     available = [v for v in [s1, s2] if v is not None]
@@ -103,7 +101,6 @@ def main():
     print(f"  Status   : {moisture_status(avg, threshold_low, threshold_high)}")
     print(f"  Threshold: {threshold_low}% (high: {threshold_high}%)")
 
-    # ── Sensor batteries ─────────────────────────────────────
     b1     = q("last_over_time(ecowitt_sensors_soil_battery_1[1h])")
     b2     = q("last_over_time(ecowitt_sensors_soil_battery_2[1h])")
     esp_wf = q("last_over_time(esp_water_flow_battery_v_value[1h])")
@@ -116,7 +113,6 @@ def main():
     print(f"  ESP WF   : {fmt(esp_wf, 'V', 2)}")
     print(f"  ESP TL   : {fmt(esp_tl, 'V', 2)}")
 
-    # ── Greenhouse environment (ESP Si7021) ──────────────────
     gh_temp = q("last_over_time(esp_greenhouse_temp_c_value[1h])")
     gh_hum  = q("last_over_time(esp_greenhouse_humidity_value[1h])")
 
@@ -125,7 +121,6 @@ def main():
     print(f"  Temp     : {fmt(gh_temp, '°C', 1)}")
     print(f"  Humidity : {fmt(gh_hum, '%', 0)}")
 
-    # ── Weather ──────────────────────────────────────────────
     temp      = q("last_over_time(weather_current_temp_c[2h])")
     humidity  = q("last_over_time(weather_current_humidity[2h])")
     wind      = q("last_over_time(weather_current_wind_speed[2h])")
@@ -145,7 +140,6 @@ def main():
     for line in rain_status(rain_now, rain_prob, rain_int):
         print(f"  {line}")
 
-    # ── Irrigation ───────────────────────────────────────────
     last_action          = q("last_over_time(irrigation_logic_action[10m])")
     last_duration        = q("last_over_time(irrigation_logic_session_duration_s[10m])")
     reason_moisture_high = q("last_over_time(irrigation_logic_reason_moisture_high[10m])")
@@ -185,7 +179,6 @@ def main():
     in_window = any(s <= hour < e for s, e in [(6, 10), (14, 21)])
     print(f"  Window   : {'✅ Active' if in_window else '⏰ Outside window'} (hour={hour})")
 
-    # ── Tank level ───────────────────────────────────────────
     tank_level = q("last_over_time(esp_tank_level_value[10m])")
 
     print()
@@ -197,7 +190,6 @@ def main():
     else:
         print("  Level    : 🔴 LOW / empty")
 
-    # ── Pump ─────────────────────────────────────────────────
     last_pump_action = q("last_over_time(irrigation_logic_pump_action[2h])")
     last_pump_reason = q("last_over_time(irrigation_logic_pump_reason[2h])")
     plug_status      = pump_status_str()

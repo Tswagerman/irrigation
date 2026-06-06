@@ -17,12 +17,8 @@ import ubinascii
 PACKET_FMT  = '<BHfffI'
 PACKET_SIZE = struct.calcsize(PACKET_FMT)   # 18 bytes
 
-# ── Wire ID → descriptive name ────────────────────────────────────────────────
 NODE_NAMES = {1: "water_flow", 2: "tank_level"}
-
-# ── ESP-NOW channel — must match sensor nodes ─────────────────────────────────
 WIFI_CHANNEL = 1
-
 
 def setup_espnow() -> espnow.ESPNow:
     sta = network.WLAN(network.STA_IF)
@@ -59,7 +55,6 @@ def run():
     sys.stdout.write(json.dumps({"event": "listening", "channel": WIFI_CHANNEL}) + "\n")
 
     while True:
-        # irecv() blocks until a packet arrives
         host, msg = e.irecv()
         if msg is None:
             continue
@@ -68,7 +63,6 @@ def run():
         try:
             peer_info = e.get_peer(host)
             # peer_info tuple: (mac, lmk, channel, ifidx, encrypt)
-            # RSSI not directly in peer_info on MicroPython; read from recv stats if available
         except Exception:
             pass
 

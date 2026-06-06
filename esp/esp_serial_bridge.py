@@ -39,9 +39,6 @@ VM_URL     = os.getenv("VM_URL", "http://localhost:8428")
 BAUD_RATE  = 115200
 
 
-# ── VictoriaMetrics write ──────────────────────────────────────────────────────
-
-
 def vm_write(lines: list[str]) -> None:
     try:
         resp = httpx.post(f"{VM_URL}/write", content="\n".join(lines), timeout=5)
@@ -49,8 +46,6 @@ def vm_write(lines: list[str]) -> None:
     except Exception as exc:
         log.warning(f"VM write failed: {exc}")
 
-
-# ── Packet handlers ────────────────────────────────────────────────────────────
 
 def handle_packet(packet: dict) -> None:
     event = packet.get("event")
@@ -67,7 +62,6 @@ def handle_packet(packet: dict) -> None:
         log.warning(f"Bad packet from {packet.get('from')} len={packet.get('len')}")
         return
 
-    # Sensor data packet
     node_id  = packet.get("node_id")
     value    = packet.get("value")
     voltage  = packet.get("voltage", 0.0)
@@ -102,8 +96,6 @@ def handle_packet(packet: dict) -> None:
 
     vm_write(lines)
 
-
-# ── Main loop ──────────────────────────────────────────────────────────────────
 
 def main(port: str):
     log.info(f"Opening serial port {port} at {BAUD_RATE} baud")
