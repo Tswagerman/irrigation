@@ -18,7 +18,7 @@ STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pump_sta
 # Soil moisture thresholds (%)
 MOISTURE_THRESHOLD_LOW_PRIMARY = 45.0  # triggers watering in morning window
 # triggers watering in afternoon window
-MOISTURE_THRESHOLD_LOW_SECONDARY = 45.0
+MOISTURE_THRESHOLD_LOW_SECONDARY = 43.0
 MOISTURE_THRESHOLD_HIGH = 50.0  # stop watering once this is reached
 
 # Watering session
