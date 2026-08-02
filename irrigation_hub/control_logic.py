@@ -32,7 +32,7 @@ WATER_WINDOWS = [
 ]
 
 # ── Pump / smart plug ───────────────────────────────────────────────────
-PUMP_FILL_DURATION = 10 * 60  # run for 12 minutes when tank is empty
+PUMP_FILL_DURATION = 10 * 60  # run for 10 minutes when tank is empty
 PUMP_TOPUP_HOUR = 5           # fallback daily top-up at 5am when sensor unavailable
 
 # How often to check conditions
