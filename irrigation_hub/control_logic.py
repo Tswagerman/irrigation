@@ -32,7 +32,7 @@ WATER_WINDOWS = [
 ]
 
 # ── Pump / smart plug ───────────────────────────────────────────────────
-PUMP_FILL_DURATION = 12 * 60  # run for 12 minutes when tank is empty
+PUMP_FILL_DURATION = 10 * 60  # run for 12 minutes when tank is empty
 PUMP_TOPUP_HOUR = 5           # fallback daily top-up at 5am when sensor unavailable
 
 # How often to check conditions
@@ -54,7 +54,7 @@ last_pump_duration: float | None = None
 last_topup_date: str | None = None
 pump_fills_today: int = 0
 last_pump_fill_date: str | None = None
-MAX_PUMP_FILLS_PER_DAY: int = 4
+MAX_PUMP_FILLS_PER_DAY: int = 2
 
 
 def _query(promql: str) -> float | None:
