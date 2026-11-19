@@ -7,6 +7,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
+IRRIGATION_ENABLED = os.getenv("IRRIGATION_ENABLED", "1") == "1"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -394,6 +395,14 @@ def run_pump_check() -> None:
         log.info(f"Fallback: pump idle — top-up at {PUMP_TOPUP_HOUR}:00 (last={last_topup_date})")
 
 
+def run_idle_check() -> None:
+    """Winter mode: log moisture for Grafana, never touch valve or pump."""
+    moisture = avg_soil_moisture()
+    log.info(f"Irrigation disabled - moisture={moisture}%")
+    _write_event({"action": 0, "moisture": moisture or -1, "triggered": 0})
+
+
+
 if __name__ == "__main__":
     log.info("Irrigation logic started")
     log.info(
@@ -409,12 +418,17 @@ if __name__ == "__main__":
     _restore_fill_state()
     log.info("Safe startup — ensuring valve is closed")
     close_valve()
+    if not IRRIGATION_ENABLED:
+        pump_off()
     log.info(f"last_pump_fill_date={last_pump_fill_date} today={datetime.now().strftime('%Y-%m-%d')}")
     log.info(f"pump_fills_today={pump_fills_today}")
     while True:
         try:
-            run_check()
-            run_pump_check()
+            if IRRIGATION_ENABLED:
+                run_check()
+                run_pump_check()
+            else:
+                run_idle_check()
         except Exception as exc:
             log.error(f"Unexpected error: {exc}")
         time.sleep(CHECK_INTERVAL_SECONDS)

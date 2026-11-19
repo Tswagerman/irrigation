@@ -73,13 +73,26 @@ def rain_status(rain_now, rain_prob, rain_int):
     return parts if parts else ["☀️  No rain expected"]
 
 
+def winter_mode() -> bool:
+    try:
+        for line in open("/home/sodas/src/irrigation_hub/.env"):
+            if line.strip().startswith("IRRIGATION_ENABLED="):
+                return line.split("=", 1)[1].strip() != "1"
+    except Exception:
+        pass
+    return False
+
+
+WINTER = winter_mode()
+
+
 def main():
     now = datetime.now()
     hour = now.hour
 
     print()
     print("=" * 52)
-    print("  🌱  IRRIGATION SYSTEM STATUS")
+    print("  🌱  IRRIGATION SYSTEM STATUS" + ("  ❄️  WINTER MODE" if WINTER else ""))
     print(f"  {now.strftime('%A %d %b %Y  %H:%M:%S')}")
     print("=" * 52)
 
@@ -147,7 +160,7 @@ def main():
     flow_pulses          = q("last_over_time(esp_water_flow_pulses_value[5m])")
 
     print()
-    print("  💧 IRRIGATION")
+    print("  💧 IRRIGATION" + ("  ❄️  DISABLED (valve + pump locked out)" if WINTER else ""))
 
     valve_open = valve_is_open()
     is_watering = last_action == 1.0 or valve_open
