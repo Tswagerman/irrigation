@@ -1,2 +1,4 @@
 .env
 *.bak
+.pump_state.json
+__pycache__/
